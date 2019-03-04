@@ -13,5 +13,8 @@
     "tutorial"
   ],
   "author": "Damien Reimert",
-  "license": "ISC"
+  "license": "ISC",
+  "dependencies": {
+    "node-rsa": "^1.0.5"
+  }
 }

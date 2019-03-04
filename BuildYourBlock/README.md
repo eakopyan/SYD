@@ -1,143 +1,101 @@
-# Tutoriel blockchain : de zéro vers ...
+# Tutoriel Blockchain : de zéro vers ...
 
-Le but de ce tutoriel est de coder une blockchain depuis zéro pour en comprendre les mécanismes. Cette blockchain sera très loin d'une blockchain de production mais permettra d'illustrer les différentes mécaniques la constituant. Les notions et les problématiques seront introduites au fur et à mesure de la progression. Certaines seront *un peu* simplifiées.
+On est en mesure de chainer les blocks et de vérifier que la chaine n'a pas été modifié.
 
-Le code se fait en Javascript pour permettre au plus grand nombre de réaliser ce tutoriel et parce que c'est le langage de programmation que j'utilise quotidiennement :D. L'environnement utilisé pour l'écriture de ce sujet est Node.js (https://nodejs.org/fr/) en version 11 avec npm pour gérer les dépendances mais il doit fonctionner à partir de la version 8. Je pars du principe que vous savez coder dans ce langage et utiliser git.
+On aimerait maintenant pouvoir échanger de la valeur via cette Blockchain. Pouvoir faire un chèque de la forme : Moi, Jean Dupond transfere 10€ à Dupont Jean. Sous cette forme, il y a plusieurs problèmes : comment gérer les homonymes ? Comment s'assurer que c'est bien Jean qui à signer le chèque ? Comment s'assurer que Jean a bien l'argent ? ...
 
-Pour écrire ce tutoriel, je me suis inspiré de la suite d'article de Kass sur Medium qui réalise une blockchain en Java : https://medium.com/programmers-blockchain/create-simple-blockchain-java-tutorial-from-scratch-6eeed3cb03fa.
+Pour les deux premières questions, il y a une solution "simple" : un couple de clés publique et privée. Pour la troisième, on va créer notre propre monnaie.
 
-## Cloner ce dépôt
+Explications !
 
-```Bash
-git clone https://github.com/dreimert/BuildYourBlock.git
-cd BuildYourBlock
-```
+## Une histoire de couple
 
-## Au commencement fut le block
+La cryptographie met à notre disposition un super outil : RSA. Pour les détails : https://fr.wikipedia.org/wiki/Chiffrement_RSA.
 
-Dans une blockchain, il y a block. Un block est un ensemble d'informations et quand les blocks sont mis bout-à-bout, ils forment une chaîne : la blockchain !
+En très gros, vous produisez un couple clé publique / clé privée. Comme son nom l'indique, vous pouvez rendre publique ... la clé publique ! Cette clé peut servir à plusieurs choses :
 
-Commençons avec une structure de block assez simple :
+* vous écrire un message en l'encryptant avec. Seul les personnes ayant la clé privée associé peuvent le décrypter.
+* Décrypter un message encrypté avec la clé privée.
+* Vérifier votre signature !
 
-* Un identifiant : permet d'identifier le block. Il sera généré aléatoirement.
-* Un identifiant de parent : l'identifiant du block qui précède dans la chaîne. Cela nous permet de remonter la chaîne jusqu'à son origine.
-* Des données : pour le moment, une simple chaîne de caractères.
+Cette clé sera l'adresse de votre portefeuille. Je vais encore prendre un raccourci mais elle est unique, plus de problème d'homonymes ! Vous pouvez aussi signer des messages et les autres pourront vérifier que c'est bien vous.
 
-J'ai écrit le fichier `index.js` suivant :
+Comme ça c'est super beau et cool mais ça ne me dit pas comment faire :/
+
+On a un premier problème, c'est que Node.js ne sais pas générer un couple de clés RSA. Il faut installer une bibliothèque tiers. Pas de soucis, on va utiliser le gestionnaire de dépendances de Node.js pour la récupérer et l'installer, j'ai nommé npm :
+
+    npm install node-rsa
+
+Vous pouvez maintenant utiliser la bibliothèque pour encrypter et décrypter un message.
 
 ```Javascript
-const Block = require("./Block");
+const NodeRSA = require('node-rsa');
+const key = new NodeRSA({b:2048});
 
-const first  = new Block(null     , "First !");
-const second = new Block(first.id , "Second :)");
-const third  = new Block(second.id, "Vous commencez à voir le principe ?");
+const text = 'Hello RSA!';
+const encrypted = key.encryptPrivate(text, 'base64');
+console.log('encrypted: ', encrypted); // encrypted:  tCJqOKgMNkRrC...
+const decrypted = key.decryptPublic(encrypted, 'utf8');
+console.log('decrypted: ', decrypted); // decrypted:  Hello RSA!
 
-console.log([first, second, third]);
+const msg = "Je transfère 10€ à Jean Dupond"
+const signature = key.sign(msg)
+
+console.log("Signature :", signature); // Signature : <Buffer c4 3a d3 01 df fc 56 4a 01 8b ... 246 more bytes>
+console.log("Vérifier :", key.verify(msg, signature)); // Vérifier : true
 ```
 
-J'ai aussi commencé à écrire le fichier `Block.js` que vous devez compléter.
+Pour en savoir plus sur comment l'utiliser : https://github.com/rzcoder/node-rsa.
 
-Quand c'est fini, dans un terminal placé dans ce dossier : `node ./index.js`. Vous devriez voir quelque chose comme cela :
+La clé publique représente ce qu'on appel un wallet. Pour le moment, disons qu'un wallet a un montant, une clé publique et si vous en êtes propriétaire, une clé privée. Il permet aussi au propriétaire de signer des messages et à tout le monde de vérifier la signature. Tout compris ? Vous n'avez plus qu'à compléter le fichier `Wallet.js`.
 
-```
-[ Block<
-       id: <xxxxxx>
-       prev: null
-       val: 'First !' >,
-  Block<
-       id: <yyyyyy>
-       prev: <xxxxxx>
-       val: 'Second :)' >,
-  Block<
-       id: <zzzzzz>
-       prev: <yyyyyy>
-       val: 'Vous commencez à voir le principe ?' > ]
-```
+`npm start` ! `Verify : true` ? Good job !
 
-C'est bon ? Magnifique ! Vous avez une première blockchain ! Bon, par contre, elle n'est  pas fonctionnelle... Quand un block est ajouté dans la Blockchain, il n'est plus modifiable. Ici, rien ne vous empêche de modifier ce que vous voulez.
+## Build Your Block Coin
 
-###### Par exemple, complétez le code d'index.js en modifiant les données du troisième block.
+On a maintenant sur solution pour signer, il faut maintenant de l'argent à transférer.
 
-## Prenons un peu de hash
+Créons une nouvelle unité, le Build Your Block coin ou BYB. Disons qu'un BYB vaut un centime. Dans ce contexte, que devient la phrase : Moi, Jean Dupond transfere 10€ à Dupont Jean ?
 
-Nous voulons vérifier que les blocks n'ont pas été modifiés. Pour vérifier l'intégrité des données, on utilise les fonctions de hachage.
+[![musique de questions](https://img.youtube.com/vi/QrPCPoOAO4E/0.jpg)](https://www.youtube.com/watch?v=QrPCPoOAO4E)
 
-Une fonction de hachage est une fonction qui prend en entrée un ensemble de données et retourne une empreinte, aussi appelée hash. L'empreinte respecte deux principes : Elle est unique pour un ensemble de données d'entrée, et une empreinte donnée ne permet pas de remonter à l'ensemble initial. On parle de non-collision et de non calculabilité de la pré-image. Cette empreinte est de taille fixe quelque-soit l'entrée. Une fonction couramment utilisé est SHA. Voici quelques exemples d'empreinte :
+C'est une transaction de la forme :
 
-```Bash
-> echo "Blockchain" | shasum
-# efcf8baf5959ad1ebc7f4950425ef1c2eae9cbd9  -
+* source : clé publique de Jean Dupond
+* destination : clé publique de Dupont Jean
+* valeur : 1000 BYB
+* signature : source + destination + valeur signé avec la clé privée de Jean Dupond
 
-> echo "Block" | shasum
-# d1a6b1157e37bdaad78bec4c3240f0d6c576ad21  -
+Facile ! Je vous laisse compléter le fichier Transaction.js alors !
 
-> echo "Vous commencez à voir le principe ?" | shasum
-# 25abec7ced7642b886c1bffbc710cc3439f23ab7  -
-```
+## Mettre des transactions en block
 
-Une propriété intéressante est qu'une petite modification dans l'entrée change totalement l'empreinte :
+On sait produire des transactions, maintenant, pour les sauvegarder, il faut les mettre dans la blockchain.
 
-```Bash
-> echo "Blockchain" | shasum
-# efcf8baf5959ad1ebc7f4950425ef1c2eae9cbd9  -
+Je vous laisse faire ! Modifiez la classe `Block` pour que data soit maintenant une liste de `Transaction`s.
 
-> echo "blockchain" | shasum
-# ea5f179324c233b002fa8ac4201fa216001515e5  -
-```
+## Photocopie
 
-Si je vous parle de tout ça, c'est qu'on va l'utiliser mais comment cela résout notre problème ?
+C'est bon ? Bravo !
+
+Mais en faite, on n'a toujours pas résolu la question de s'assurer que la source à l'argent. Vous ne pouvez pas non plus distinguer deux envois de 1000 BYB. Qu'est qui empêche Dupont Jean d'ajouter indéfiniment votre transaction à la Blockchain ?
 
 Une idée ?
 
-Cool !
+On veux que quelque-chose soit unique ? On a déjà eu ce problème, non ? Quel solution on a utilisé déjà ?
 
-On va calculer l'empreinte du block avec cette fonction et on va utiliser cette empreinte comme identifiant du block. Si on modifie le block, son empreinte change donc son `id` change ! Mais cette `id` est utilisé dans le block suivant, ce qui modifie son empreinte. Et ainsi de suite jusqu'au dernier block de la chaîne. On va tester plus loin.
+Vous avez trouvé ?
 
-La fonction suivante prend en entrée une chaîne de caractère et retourne l'empreinte correspondante.
+Et si on mettait un id à nos transactions calculé à partir du contenu de celle-ci ? C'est cool ça mais je vois déjà pleins de choses qu'il va falloir vérifier. Il va falloir vérifier que la transaction est unique dans la blockchain, si elle est dans la blockchain, je ne peux pas l'ajouter au block courant.
 
-```Javascript
-const crypto = require('crypto');
+Autre chose, si je veux faire deux transactions de 1000 BYB à Jean, je ne peux pas quand leur signature sera la même ! Je dois rajouter une autre information comme la date et/ou un nonce.
 
-function getHash(unMotDoux) {
-  return crypto.createHash('sha256').update(unMotDoux, 'utf8').digest('hex');
-}
-```
-
-Modifier la class Block pour lui ajouter la fonction getHash qui calcule l'empreinte correspondant au block. Pour calculer cette empreinte, vous devez utiliser l'identifiant du block précédent et les données contenues dans le block.
-
-Exemple de concaténation :
-
-```Javascript
-const toHash = `${previous}${data}`;
-```
-
-Vous obtenez exactement ça :
-
-```
-[ Block<
-       id: '9b1d3da5be217ffa1622466bf7c2e5fea827c4ee7c32af170da00f89ed49356d'
-       prev: null
-       val: 'First !' >,
-  Block<
-       id: 'ffb3dad005c79eb32345f2506189368ef5556dbacd05c8b94d59907ce64bd722'
-       prev: '9b1d3da5be217ffa1622466bf7c2e5fea827c4ee7c32af170da00f89ed49356d'
-       val: 'Second :)' >,
-  Block<
-       id: '66d623f52b392c4ddec3129a25a9e5b992d71b062aff0d838fec16cda7527dcf'
-       prev: 'ffb3dad005c79eb32345f2506189368ef5556dbacd05c8b94d59907ce64bd722'
-       val: 'Vous commencez à voir le principe ?' > ]
-```
-
-Maintenant, essayez de modifier le premier élément de la chaîne.
-
-###### Comparez avec l'exécution précédente. Qu'est-ce qu'il se passe ?
-
-## Passer entre les mailles du filet
-
-Modifiez la fonction `isValid` pour qu'elle vérifie que l'id du block correspond à son contenu.
-
-###### Comme précédemment, complétez le code d'index.js en modifiant les données du troisième block. Que ce passe t'il ?
+Bon, je vous laisse implémenter tout ça :D.
 
 ## Suite
 
-Vous avez survécu ? Cool ! Passons à l'étape suivante : `git checkout etape-2`.
+Vos mains saignent devant tant de code mais ça fonctionne ? Cool ! <Rire sadique> :D
+
+Mais en faite, on n'a toujours pas résolu la question de s'assurer que la source à l'argent. Qu'est qui empêche Dupont Jean d'envoyer tout son argent vers deux personnes différentes en même temps ? Que de questions, que de problèmes.
+
+Pour résoudre tout ça, il va falloir complexifier un peu les transactions. Pas beaucoup mais on va y consacrer l'étape suivante : `git checkout etape-4`.
