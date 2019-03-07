@@ -1,27 +1,88 @@
 const NodeRSA = require('node-rsa');
 
-module.exports = class Transaction {
+function calcUnspentOutputsForMontant(montant, unspentOutputs, myPublicKey) {
+  let unspentOutputsForMontant = [];
+  let valueUnspentOutputsForMontant = 0;
+
+  for (let i = 0; i < unspentOutputs.length; i++) {
+    const unspentOutput = unspentOutputs[i];
+    const output = unspentOutput.tx.outputs[unspentOutput.index];
+
+    if(output.destinataire === publicKey) {
+      unspentOutputsForMontant.push(unspentOutput);
+      valueUnspentOutputsForMontant += output.montant;
+
+      if (valueUnspentOutputsForMontant >= montant) {
+        return unspentOutputsForMontant;
+      } else {
+        continue;
+      }
+    } else {
+      continue;
+    }
+  }
+
+  // Quand on n'a pas assez d'argent, on lance une exception
+  throw new Error("Vous n'avez pas assez.");
+}
+
+// Représente une transaction ou un chèque.
+// Souvent abrégé en tx quand passé en variable.
+class Transaction {
+  // Construit une transaction envoyant montant à destinataire.
+  // Retourne la transaction
+  static buildSimpleTransaction(senderWallet, destinataire, montant, unspentOutputs) {
+
+    const unspentOutputsForMontant = calcUnspentOutputsForMontant(/* ... */);
+    // ...
+
+    return new Transaction(/* ... */);
+  }
+
+  // @params inputs : un tableau de Input
+  // @params outputs : un tableau de Output
   constructor(
-    sourcePublicKey,
-    destinationPublicKey,
-    montant,
-    signature = null
+    inputs,
+    outputs
   ) {
-    this.sourcePublicKey = sourcePublicKey;
-    this.destinationPublicKey = destinationPublicKey;
-    this.montant = montant;
-    this.signature = signature;
+    // ...
+    this.id = ''; // ...
   }
 
-  sign(privateKey) {
-    return privateKey.sign(this.sourcePublicKey+this.destinationPublicKey+this.montant);
+  // Retourne le hash du Tx : hash des inputs + hash des outputs
+  getHash() {
+    const hashInputs = this.inputs.map((input) => {return input.hash;}).join('');
+    // ...
+  }
+}
+
+class Input {
+  // @params tx : transaction dans laquelle est le Output que j'utilise
+  // @params index : index du Output dans le outputs de la transaction
+  // @params signature : signature du destinataire du Output
+  constructor(tx, index, signature) {
+    // ...
   }
 
-  setSignature(signature) {
-    this.signature = signature;
+  // Retourne le hash du Input : tx.id + index + signature
+  getHash() {
+    // ...
+  }
+}
+
+class Output {
+  constructor(montant, destinataire) {
+    // ...
   }
 
-  verify() {
-    return this.sourcePublicKey.verify(this.sourcePublicKey+this.destinationPublicKey+this.montant, this.signature);
+  // Retourne le hash du Output : montant + destinataire
+  getHash() {
+    // ...
   }
+}
+
+module.exports = {
+  Transaction,
+  Input,
+  Output
 }
